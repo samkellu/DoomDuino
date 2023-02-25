@@ -1,61 +1,18 @@
-/**************************************************************************
- This is an example for our Monochrome OLEDs based on SSD1306 drivers
-
- Pick one up today in the adafruit shop!
- ------> http://www.adafruit.com/category/63_98
-
- This example is for a 128x64 pixel display using I2C to communicate
- 3 pins are required to interface (two I2C and one reset).
-
- Adafruit invests time and resources providing this open
- source code, please support Adafruit and open-source
- hardware by purchasing products from Adafruit!
-
- Written by Limor Fried/Ladyada for Adafruit Industries,
- with contributions from the open source community.
- BSD license, check license.txt for more information
- All text above, and the splash screen below must be
- included in any redistribution.
- **************************************************************************/
-
 #include <SPI.h>
 #include <Wire.h>
-#include <Adafruit_GFX.h>
+//#include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 
-// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
 // The pins for I2C are defined by the Wire-library. 
 // On an arduino UNO:       A4(SDA), A5(SCL)
-// On an arduino MEGA 2560: 20(SDA), 21(SCL)
-// On an arduino LEONARDO:   2(SDA),  3(SCL), ...
 #define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-#define NUMFLAKES     10 // Number of snowflakes in the animation example
 #define PI 3.14159f
-#define LOGO_HEIGHT   16
-#define LOGO_WIDTH    16
-static const unsigned char PROGMEM logo_bmp[] =
-{ 0b00000000, 0b11000000,
-  0b00000001, 0b11000000,
-  0b00000001, 0b11000000,
-  0b00000011, 0b11100000,
-  0b11110011, 0b11100000,
-  0b11111110, 0b11111000,
-  0b01111110, 0b11111111,
-  0b00110011, 0b10011111,
-  0b00011111, 0b11111100,
-  0b00001101, 0b01110000,
-  0b00011011, 0b10100000,
-  0b00111111, 0b11100000,
-  0b00111111, 0b11110000,
-  0b01111100, 0b11110000,
-  0b01110000, 0b01110000,
-  0b00000000, 0b00110000 };
 
 struct vec3 {
   float x, y, z;
@@ -69,8 +26,18 @@ struct line {
   vec2 points[2];
 };
 
+const int lBtn = 4;
+const int fBtn = 3;
+const int rBtn = 2;
+
+const int rotSpeed = 5;
+
 void setup() {
   Serial.begin(9600);
+
+  pinMode(lBtn, INPUT_PULLUP);
+  pinMode(fBtn, INPUT_PULLUP);
+  pinMode(rBtn, INPUT_PULLUP);
 
   if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
     Serial.println(F("SSD1306 allocation failed"));
@@ -81,26 +48,41 @@ void setup() {
         py = 32.0f,
         pa = 0.0f;
 
-
-
   line walls[] = {
-    {10.0f, 10.0f, 11.0f, 60.0f},
-    {25.0f, 30.0f, 60.0f, 5.0f}, 
-    {40.0f, 60.0f, 100.0f, 35.0f},
-    {120.0f, 30.0f, 100.0f, 15.0f}
+    {10.0f, 10.0f, 10.0f, 60.0f},
+    {10.0f, 60.0f, 120.0f, 60.0f}, 
+    {120.0f, 60.0f, 120.0f, 10.0f},
+    {120.0f, 10.0f, 10.0f, 10.0f}
   };
   display.clearDisplay();
 
   while (true) {
-    raycast(walls, 4, px, py, pa);
-    pa += 30.0f;
+    int l = digitalRead(lBtn);
+    int r = digitalRead(rBtn);
+    int f = digitalRead(fBtn);
+    
+    if (l == 0) {
+      pa = (pa - rotSpeed < 0 ? pa - rotSpeed + 360 : pa - rotSpeed);
+      raycast(walls, 4, px, py, pa);
+    }
+    
+    if (r == 0) {
+      pa = (pa + rotSpeed >= 360 ? pa + rotSpeed - 360 : pa + rotSpeed);
+      raycast(walls, 4, px, py, pa);
+    }
+
+    if (f == 0) {
+      px += 2*cos(pa * (PI/180));
+      py += 2*sin(pa * (PI/180));
+      raycast(walls, 4, px, py, pa);
+    }
   }
 }
 
 void raycast(line* walls, int num_walls, int px, int py, float pa) {
-
-  float fov = 40.0f;
-  float dov = 60.0f;
+  
+  float dov = 20.0f;
+  float fov = 46.0f;
 
   float x3 = px;
   float y3 = py;
@@ -108,19 +90,22 @@ void raycast(line* walls, int num_walls, int px, int py, float pa) {
   float y4;
 
   display.clearDisplay();
-  for (int w = 0; w < num_walls; w++) {
-    bresenham_line((int)walls[w].points[0].x, (int)walls[w].points[0].y, (int)walls[w].points[1].x, (int)walls[w].points[1].y);
-  }
-  display.display();
+//  for (int w = 0; w < num_walls; w++) {
+//    bresenham_line((int)walls[w].points[0].x, (int)walls[w].points[0].y, (int)walls[w].points[1].x, (int)walls[w].points[1].y);
+//  }
+//  display.display();
+
+  int counter = 0;
   
   // Defines the number of rays
-  for (int i = -45; i < 45; i+= 5) {
+  for (int i = 0; i < 128; i++) {
 
-    x4 = px + dov*sinf((pa + i) * (PI/180));
-    
-    y4 = py + dov*cosf((pa + i) * (PI/180));
+    float angle = (i*(fov/127.0f)) - (fov/2.0f);
 
-    float dist = 100.0f;
+    x4 = px + dov*cosf((pa + angle) * (PI/180));
+    y4 = py + dov*sinf((pa + angle) * (PI/180));
+
+    float dist = 1000.0f;
     vec2 pt_final = { NULL, NULL };
     for (int w = 0; w < num_walls; w++) {
       
@@ -138,25 +123,57 @@ void raycast(line* walls, int num_walls, int px, int py, float pa) {
   
       float t = ((x1-x3)*(y3-y4)-(y1-y3)*(x3-x4))/denominator;
       float u = -((x1-x2)*(y1-y3)-(y1-y2)*(x1-x3))/denominator;
-  
+
       if (t > 0 && t < 1 && u > 0) {
         
         vec2 pt = { x1 + t * (x2 - x1), y1 + t * (y2 - y1) };
         float ptDist = sqrt(pow(pt.y-py, 2) + pow(pt.x-px, 2));
-        dist = (ptDist < dist ? ptDist : dist);
-        pt_final = pt;
+        if (ptDist < dist) {
+          dist = ptDist;
+          pt_final = pt;
+        }
       }
     }
     if (pt_final.x != NULL) {
-      bresenham_line((int)px, (int)py, (int)pt_final.x, (int)pt_final.y); 
-      display.display();
+      int length = 800.0f/dist;
+      counter = counter > 7 ? 0 : counter + 1;
+      if (counter >= 4) {
+        vertical_line(i, length, -8, true);
+      } else if (counter >= 0) {
+        vertical_line(i, length, -8, false);
+      }
     }
   }
-  delay(100);
+  display.display();
+}
+
+void vertical_line(int x, int half_length, int offset, boolean phase) {
+  for (int i = 0; i < half_length; i+=2) {
+    if (phase) {
+      if ((i >= half_length/4.0f && i <= half_length/2.0f) || (i >= 3*half_length/4.0f && i <= half_length)) {
+        i += half_length/4;
+      }
+    } else {
+      if ((i >= 0 && i <= half_length/1.0f) || (i >= 2*half_length/4.0f && i <= 3*half_length/4.0f)) {
+        i += half_length/4;
+      }
+    }
+
+    display.drawPixel(x, SCREEN_HEIGHT/2 - i - offset, WHITE);
+    display.drawPixel(x, SCREEN_HEIGHT/2 + i - offset, WHITE);
+  }
 }
 
 void bresenham_line(int x1, int y1, int x2, int y2)
 {
+    x1 = (x1 >= SCREEN_WIDTH ? SCREEN_WIDTH - 1 : x1);
+    x1 = (x1 < 0 ? 0 : x1);
+    y1 = (y1 >= SCREEN_HEIGHT ? SCREEN_HEIGHT - 1 : y1);
+    y1 = (y1 < 0 ? 0 : y1);
+    x2 = (x2 >= SCREEN_WIDTH ? SCREEN_WIDTH - 1 : x2);
+    x2 = (x2 < 0 ? 0 : x2);
+    y2 = (y2 >= SCREEN_HEIGHT ? SCREEN_HEIGHT - 1 : y2);
+    y2 = (y2 < 0 ? 0 : y2);
     int dx = x2 - x1;
     int dy = y2 - y1;
 
@@ -174,7 +191,7 @@ void bresenham_line(int x1, int y1, int x2, int y2)
 
     int x = x1;
     int y = y1;
-    // Lower octaves (increment x)
+    // Lower octants (increment x)
     if(dx > dy) {   
         for(int i = 0; i < d; i++) {   
             display.drawPixel(x, y, WHITE);
@@ -185,7 +202,7 @@ void bresenham_line(int x1, int y1, int x2, int y2)
                 r -= dx;
             }
         }
-    // Upper octaves (increment y)
+    // Upper octants (increment y)
     } else {   
         for(int i = 0; i < d; i++) {    
             display.drawPixel(x, y, WHITE);

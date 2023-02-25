@@ -13,23 +13,27 @@
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 #define PI 3.14159f
+#define COLLISION_DIST 5
 
-struct vec3 {
-  float x, y, z;
+enum texture {
+  CHECK,
+  STRIPE_V,
+  STRIPE_H,
+  STRIPE_D
 };
 
 struct vec2 {
   float x, y;
 };
 
-struct line {
+struct wall {
   vec2 points[2];
+  texture tex;
 };
 
 const int lBtn = 4;
 const int fBtn = 3;
 const int rBtn = 2;
-
 const int rotSpeed = 5;
 
 void setup() {
@@ -44,48 +48,54 @@ void setup() {
     for(;;); // Don't proceed, loop forever
   }
 
-  float px = 64.0f,
-        py = 32.0f,
-        pa = 0.0f;
 
-  line walls[] = {
-    {10.0f, 10.0f, 10.0f, 60.0f},
-    {10.0f, 60.0f, 120.0f, 60.0f}, 
-    {120.0f, 60.0f, 120.0f, 10.0f},
-    {120.0f, 10.0f, 10.0f, 10.0f}
+  
+  vec2 p = { 64.0f, 32.0f };
+  float pa = 0.0f;
+
+  wall walls[] = {
+    {10.0f, 10.0f, 10.0f, 60.0f, CHECK},
+    {10.0f, 60.0f, 120.0f, 60.0f, STRIPE_V}, 
+    {120.0f, 60.0f, 120.0f, 10.0f, STRIPE_H},
+    {120.0f, 10.0f, 10.0f, 10.0f, STRIPE_D}
   };
+  
   display.clearDisplay();
 
   while (true) {
     int l = digitalRead(lBtn);
     int r = digitalRead(rBtn);
     int f = digitalRead(fBtn);
+    int run_cast = 0;
     
     if (l == 0) {
       pa = (pa - rotSpeed < 0 ? pa - rotSpeed + 360 : pa - rotSpeed);
-      raycast(walls, 4, px, py, pa);
+      run_cast = 1;
     }
     
     if (r == 0) {
       pa = (pa + rotSpeed >= 360 ? pa + rotSpeed - 360 : pa + rotSpeed);
-      raycast(walls, 4, px, py, pa);
+      run_cast = 1;
     }
 
     if (f == 0) {
-      px += 2*cos(pa * (PI/180));
-      py += 2*sin(pa * (PI/180));
-      raycast(walls, 4, px, py, pa);
+      p = collision_detection(walls, 4, p.x + 2*cos(pa * (PI/180)), p.y + 2*sin(pa * (PI/180)));
+      run_cast = 1;
+    }
+
+    if (run_cast) {
+      raycast(walls, 4, p, pa);
     }
   }
 }
 
-void raycast(line* walls, int num_walls, int px, int py, float pa) {
+void raycast(wall* walls, int num_walls, vec2 p, float pa) {
   
-  float dov = 20.0f;
-  float fov = 46.0f;
+  float dov = 12.0f;
+  float fov = 90.0f;
 
-  float x3 = px;
-  float y3 = py;
+  float x3 = p.x;
+  float y3 = p.y;
   float x4;
   float y4;
 
@@ -98,15 +108,17 @@ void raycast(line* walls, int num_walls, int px, int py, float pa) {
   int counter = 0;
   
   // Defines the number of rays
-  for (int i = 0; i < 128; i++) {
+  for (int i = 0; i < 128; i+=2) {
 
     float angle = (i*(fov/127.0f)) - (fov/2.0f);
 
-    x4 = px + dov*cosf((pa + angle) * (PI/180));
-    y4 = py + dov*sinf((pa + angle) * (PI/180));
+    x4 = p.x + dov*cosf((pa + angle) * (PI/180));
+    y4 = p.y + dov*sinf((pa + angle) * (PI/180));
 
     float dist = 1000.0f;
     vec2 pt_final = { NULL, NULL };
+    wall cur_wall;
+    
     for (int w = 0; w < num_walls; w++) {
       
       float x1 = walls[w].points[0].x;
@@ -127,41 +139,93 @@ void raycast(line* walls, int num_walls, int px, int py, float pa) {
       if (t > 0 && t < 1 && u > 0) {
         
         vec2 pt = { x1 + t * (x2 - x1), y1 + t * (y2 - y1) };
-        float ptDist = sqrt(pow(pt.y-py, 2) + pow(pt.x-px, 2));
+        float ptDist = sqrt(pow(pt.y-p.y, 2) + pow(pt.x-p.x, 2));
         if (ptDist < dist) {
           dist = ptDist;
           pt_final = pt;
+//          cur_wall = walls[w]; 
         }
       }
     }
+    
     if (pt_final.x != NULL) {
-      int length = 800.0f/dist;
-      counter = counter > 7 ? 0 : counter + 1;
-      if (counter >= 4) {
-        vertical_line(i, length, -8, true);
-      } else if (counter >= 0) {
-        vertical_line(i, length, -8, false);
-      }
+      int length = 700.0f/dist;
+//      drawVLine(
+//        i,
+//        SCREEN_HEIGHT / dist - length / 2 + SCREEN_HEIGHT / 2,
+//        SCREEN_HEIGHT / dist + length / 2 + SCREEN_HEIGHT / 2,
+//        6 - int(dist / dov * 6)
+//      );
+      
+//      if (cur_wall.tex == CHECK) {
+
+        int lim = length/2;
+        
+        counter = counter > lim ? 0 : counter + 1;
+        if (counter >= lim/2) {
+          vertical_line(i, length, -8, true);
+        } else if (counter >= 0) {
+          vertical_line(i, length, -8, false);
+        }
+        
+//      } else if (cur_wall.tex == STRIPE_H) {
+//        
+//      } else if (cur_wall.tex == STRIPE_V) {
+//        
+//      } else if (cur_wall.tex == STRIPE_D) {
+//  
+//      }
+
     }
   }
   display.display();
 }
 
 void vertical_line(int x, int half_length, int offset, boolean phase) {
-  for (int i = 0; i < half_length; i+=2) {
+
+  int lower = SCREEN_HEIGHT/2 - half_length - offset;
+  int upper = SCREEN_HEIGHT/2 + half_length - offset;
+  
+  for (int i = lower; i < upper; i+=2) {
+
+    if (i > SCREEN_HEIGHT) {break;}
+    
     if (phase) {
-      if ((i >= half_length/4.0f && i <= half_length/2.0f) || (i >= 3*half_length/4.0f && i <= half_length)) {
-        i += half_length/4;
+      if (i == lower || (i >= lower + half_length && i <= lower + 3*half_length/2)) {
+        i += half_length/2;
       }
     } else {
-      if ((i >= 0 && i <= half_length/1.0f) || (i >= 2*half_length/4.0f && i <= 3*half_length/4.0f)) {
-        i += half_length/4;
+      if ((i >= lower + half_length/2 && i <= lower + half_length) || (i >= lower + 3*half_length/2 && i <= upper)) {
+        i += half_length/2;
       }
     }
-
-    display.drawPixel(x, SCREEN_HEIGHT/2 - i - offset, WHITE);
-    display.drawPixel(x, SCREEN_HEIGHT/2 + i - offset, WHITE);
+    
+    display.drawPixel(x, i, WHITE);
   }
+  display.drawPixel(x, SCREEN_HEIGHT/2 - half_length - offset, WHITE);
+  display.drawPixel(x, SCREEN_HEIGHT/2 + half_length - offset, WHITE);
+}
+
+vec2 collision_detection(wall walls[], int num_walls, float px, float py) {
+
+  vec2 nv;
+  nv.x = px;
+  nv.y = py;
+  
+  int dir = 0;
+  for (int i = 0; i < num_walls; i++) {
+
+    if (abs(nv.x - walls[i].points->x) < 5) {
+      dir = nv.x - walls[i].points->x > 0 ? 1 : -1;
+      nv.x = walls[i].points->x + dir*COLLISION_DIST;
+    }
+    if (abs(nv.y - walls[i].points->y) < 5) {
+      dir = nv.y - walls[i].points->y > 0 ? 1 : -1;
+      nv.y = walls[i].points->y + dir*COLLISION_DIST;
+    }
+  }
+
+  return nv;
 }
 
 void bresenham_line(int x1, int y1, int x2, int y2)

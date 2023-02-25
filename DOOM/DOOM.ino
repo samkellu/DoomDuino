@@ -12,6 +12,8 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define COLLISION_DIST 5
 #define WALL_OFFSET 0
 #define NUM_WALLS 4
+#define UI_HEIGHT 54
+#define START_TIME_MILLI 4000
 
 // Doom logo intro screen, stored in PROGMEM to save global section space
 #define LOGO_WIDTH 128
@@ -162,7 +164,8 @@ void setup() {
   display.clearDisplay();
   display.drawBitmap(0, 0, doom_logo,  LOGO_WIDTH, LOGO_HEIGHT, WHITE);
   display.display();
-  delay(4000);
+  delay(START_TIME_MILLI);
+  display.clearDisplay();
 
   // Initializes player state
   vec2 p = { 64.0f, 32.0f };
@@ -179,44 +182,57 @@ void setup() {
 
   raycast(walls, p, pa, false);
 
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+
+  int score = 0;
+
   // Waits for inputs continually (main game loop)
   while (true) {
     int l = digitalRead(l_btn);
     int r = digitalRead(r_btn);
     int f = digitalRead(f_btn);
     int shoot = digitalRead(shoot_btn);
-    int run_cast = 0;
-
-    Serial.println(shot_timer);
     
     if (shoot == 0 && shot_timer == 0) {
       shot_timer = 5;
     }
 
     if (shot_timer > 0) {
-      run_cast = 1;
       shot_timer--;
     }
 
     if (l == 0) {
       pa = (pa - rotSpeed < 0 ? pa - rotSpeed + 360 : pa - rotSpeed);
-      run_cast = 1;
     }
 
     if (r == 0) {
       pa = (pa + rotSpeed >= 360 ? pa + rotSpeed - 360 : pa + rotSpeed);
-      run_cast = 1;
     }
 
     if (f == 0) {
       p = collision_detection(walls, p.x + 2*cos(pa * (PI/180)), p.y + 2*sin(pa * (PI/180)));
-      run_cast = 1;
     }
 
-    // Runs the raycasting function if any input has been detected
-    if (run_cast) {
-      raycast(walls, p, pa, shot_timer > 0);
+    display.clearDisplay();
+    for (int i = 0; i < SCREEN_WIDTH; i++) {
+      display.drawPixel(i, UI_HEIGHT, WHITE);
     }
+
+    char buf[16];
+    // Displays the players current score
+    display.setCursor(2, UI_HEIGHT + 3);
+    sprintf(buf, "SCORE: %i", score);
+    display.println(buf);
+
+    // Displays the current game time
+    display.setCursor(SCREEN_WIDTH/2 + 2, UI_HEIGHT + 3);
+    sprintf(buf, "TIME: %i", (millis() - START_TIME_MILLI)/1000);
+    display.println(buf);
+
+    // Runs the raycasting function if any input has been detected
+    raycast(walls, p, pa, shot_timer > 0);
+    display.display();
   }
 }
 
@@ -231,7 +247,6 @@ void raycast(wall* walls, vec2 p, float pa, bool show_gun) {
   float y3 = p.y;
   float x4, y4;
 
-  display.clearDisplay();
 //  for (int w = 0; w < num_walls; w++) {
 //    bresenham_line((int)walls[w].points[0].x, (int)walls[w].points[0].y, (int)walls[w].points[1].x, (int)walls[w].points[1].y);
 //  }
@@ -314,28 +329,30 @@ void raycast(wall* walls, vec2 p, float pa, bool show_gun) {
   }
 
   if (show_gun) {
-    display.drawBitmap(SCREEN_WIDTH/2 - FLASH_WIDTH/2 + 2, SCREEN_HEIGHT - 3*FLASH_HEIGHT/4 - GUN_HEIGHT, muzzle_flash_bmp, FLASH_WIDTH, FLASH_HEIGHT, WHITE);
+    display.drawBitmap(SCREEN_WIDTH/2 - FLASH_WIDTH/2 + 2, UI_HEIGHT - 3*FLASH_HEIGHT/4 - GUN_HEIGHT, muzzle_flash_bmp, FLASH_WIDTH, FLASH_HEIGHT, WHITE);
   }
   
-  display.drawBitmap(SCREEN_WIDTH/2 - GUN_WIDTH/2, SCREEN_HEIGHT - GUN_HEIGHT, gun_bmp_mask,  GUN_WIDTH, GUN_HEIGHT, BLACK);
-  display.drawBitmap(SCREEN_WIDTH/2 - GUN_WIDTH/2, SCREEN_HEIGHT - GUN_HEIGHT, gun_bmp,  GUN_WIDTH, GUN_HEIGHT, WHITE);
-  display.display();
+  display.drawBitmap(SCREEN_WIDTH/2 - GUN_WIDTH/2, UI_HEIGHT - GUN_HEIGHT, gun_bmp_mask,  GUN_WIDTH, GUN_HEIGHT, BLACK);
+  display.drawBitmap(SCREEN_WIDTH/2 - GUN_WIDTH/2, UI_HEIGHT - GUN_HEIGHT, gun_bmp,  GUN_WIDTH, GUN_HEIGHT, WHITE);
 }
 
 void vertical_line(int x, int half_length) {
   for (int i = 0; i < half_length; i+=2) {
-    display.drawPixel(x, SCREEN_HEIGHT/2 + WALL_OFFSET + i, WHITE);
-    display.drawPixel(x, SCREEN_HEIGHT/2 + WALL_OFFSET - i, WHITE);
+    display.drawPixel(x, UI_HEIGHT/2 + WALL_OFFSET + i, WHITE);
+    // Ensures that the wall doesnt overlap with the UI
+    if (UI_HEIGHT/2 + WALL_OFFSET - i < UI_HEIGHT) {
+      display.drawPixel(x, UI_HEIGHT/2 + WALL_OFFSET - i, WHITE);
+    }
   }
 }
 
 void check_line(int x, int half_length, boolean phase) {
-  int lower = SCREEN_HEIGHT/2 - half_length + WALL_OFFSET;
-  int upper = SCREEN_HEIGHT/2 + half_length + WALL_OFFSET;
+  int lower = UI_HEIGHT/2 - half_length + WALL_OFFSET;
+  int upper = UI_HEIGHT/2 + half_length + WALL_OFFSET;
 
   for (int i = lower; i < upper; i+=2) {
 
-    if (i > SCREEN_HEIGHT) {break;}
+    if (i > UI_HEIGHT) {break;}
 
     if (phase) {
       if (i == lower || (i >= lower + half_length && i <= lower + 3*half_length/2)) {
@@ -349,8 +366,8 @@ void check_line(int x, int half_length, boolean phase) {
 
     display.drawPixel(x, i, WHITE);
   }
-  display.drawPixel(x, SCREEN_HEIGHT/2 - half_length + WALL_OFFSET, WHITE);
-  display.drawPixel(x, SCREEN_HEIGHT/2 + half_length + WALL_OFFSET, WHITE);
+  display.drawPixel(x, UI_HEIGHT/2 - half_length + WALL_OFFSET, WHITE);
+  display.drawPixel(x, UI_HEIGHT/2 + half_length + WALL_OFFSET, WHITE);
 }
 
 vec2 collision_detection(wall walls[], float px, float py) {

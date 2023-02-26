@@ -7,7 +7,7 @@ In order to set this up you will need:
  - SSD1306 128x32px OLED screen
  
 The wiring (as I have it setup) is as follows:
-
+<pre>
  - Left Button    -> Digital In p5
  - Forward Button -> Digital In p4
  - Right Button   -> Digital In p3
@@ -15,7 +15,8 @@ The wiring (as I have it setup) is as follows:
  
  - Screen SCL     -> Analogue In p5
  - Screen SDA     -> Analogue In p4
- 
+</pre>
+
 ![DoomSetup](https://user-images.githubusercontent.com/34088495/221393432-3a28edbb-ca72-4aab-ba64-c33f711a304f.PNG)
  
 This project also requires the Adafruit SSD1306 library to run:
@@ -31,4 +32,14 @@ Currently Implemented:
   - Tiled wall textures
   - Intro, character and gun textures
   - Score and time GUI
+  
+To Be Implemented:
+
+ - Enemies
+ - Enemy AI
+ - Shooting mechanic
+ - Full level to explore
+ - Doors and locked doors
+ - More Weapons
+ - Pickups
  

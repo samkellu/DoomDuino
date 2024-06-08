@@ -145,6 +145,10 @@ struct wall {
 // Number of degrees per tick
 const int rotSpeed = 5;
 
+float pow2(float x) { return x * x; }
+
+float dist2(vec2 v, vec2 u) { return pow2(v.x - u.x) + pow2(v.y - u.y); }
+
 void setup() {
 
   // Initializes hardware
@@ -167,16 +171,20 @@ void setup() {
   display.clearDisplay();
 
   // Initializes player state
-  vec2 p = { 64.0f, 32.0f };
-  float pa = 0.0f;
+  vec2 p = { 20.0f, 20.0f };
+  int pa = 0;
   int shot_timer = 0;
 
   // Initializes walls
-  wall walls[] = {
-    {10.0f, 10.0f, 10.0f, 60.0f, CHECK},
-    {10.0f, 60.0f, 120.0f, 60.0f, CHECK},
-    {120.0f, 60.0f, 120.0f, 10.0f, CHECK},
-    {120.0f, 10.0f, 10.0f, 10.0f, CHECK}
+  const wall PROGMEM walls[] = {
+    {10, 10, 10, 120, CHECK},
+    {10, 120, 120, 120, CHECK},
+    {120, 120, 120, 10, CHECK},
+    {120, 10, 10, 10, CHECK}
+    // {40.0f, 40.0f, 40.0f, 50.0f, CHECK},
+    // {40.0f, 50.0f, 50.0f, 50.0f, CHECK},
+    // {50.0f, 50.0f, 50.0f, 40.0f, CHECK},
+    // {50.0f, 40.0f, 40.0f, 40.0f, CHECK}
   };
 
   raycast(walls, p, pa, false);
@@ -239,11 +247,11 @@ void setup() {
 }
 
 // Runs a pseudo-3D raycasting algorithm on the environment around the player
-void raycast(wall* walls, vec2 p, float pa, bool show_gun) {
+void raycast(wall* walls, vec2 p, int pa, bool show_gun) {
 
   // Defines the camera's depth of view and field of view
-  float dov = 12.0f;
-  float fov = 90.0f;
+  float dov = 10.0f;
+  float fov = 80.0f;
 
   float x3 = p.x;
   float y3 = p.y;
@@ -259,7 +267,7 @@ void raycast(wall* walls, vec2 p, float pa, bool show_gun) {
     x4 = p.x + dov*cosf((pa + angle) * (PI/180));
     y4 = p.y + dov*sinf((pa + angle) * (PI/180));
 
-    float dist = 1000.0f;
+    float dist = 100000.0f;
     vec2 pt_final = { NULL, NULL };
     wall cur_wall;
     int cur_edge2pt;
@@ -275,9 +283,7 @@ void raycast(wall* walls, vec2 p, float pa, bool show_gun) {
       float denominator = (x1-x2)*(y3-y4)-(y1-y2)*(x3-x4);
 
       // vectors do not ever intersect
-      if (denominator == 0) {
-        continue;
-      }
+      if (denominator == 0) continue;
 
       float t = ((x1-x3)*(y3-y4)-(y1-y3)*(x3-x4))/denominator;
       float u = -((x1-x2)*(y1-y3)-(y1-y2)*(x1-x3))/denominator;
@@ -286,33 +292,31 @@ void raycast(wall* walls, vec2 p, float pa, bool show_gun) {
       if (t > 0 && t < 1 && u > 0) {
 
         vec2 pt = { x1 + t * (x2 - x1), y1 + t * (y2 - y1) };
-        float ptDist = sqrt(pow(pt.y-p.y, 2) + pow(pt.x-p.x, 2));
+        float ptDist2 = dist2(pt, p);
 
         // Checks if the intersected wall is the closest to the camera
-        if (ptDist < dist) {
-          dist = ptDist;
+        if (ptDist2 < dist) {
+          dist = ptDist2;
           pt_final = pt;
           cur_wall = walls[w];
-          cur_edge2pt = (int) sqrt(pow(pt.x - x1, 2) + pow(pt.y - y1, 2));
+          cur_edge2pt = dist2(pt, cur_wall.points[0]);
         }
       }
     }
 
     if (pt_final.x != NULL) {
 
-      int length = 700.0f/dist;
+      int length = 25000 / dist;
 
       // Draws lines at the edges of walls
-      if (cur_edge2pt == 0 || cur_edge2pt == sqrt(pow(cur_wall.points[0].x - cur_wall.points[1].x, 2)
-          + pow(cur_wall.points[0].y - cur_wall.points[1].y, 2))) {
-
+      int wall_len = dist2(cur_wall.points[0], cur_wall.points[1]);
+      if (cur_edge2pt < 2 || wall_len - cur_edge2pt < 2) {
         vertical_line(i, length);
+        continue;
       }
 
       if (cur_wall.tex == CHECK) {
-
-        check_line(i, length, cur_edge2pt%10 < 5 ? true : false);
-
+        check_line(i, length, (cur_edge2pt % 1000) < 500);
       }
 //      } else if (cur_wall.tex == STRIPE_H) {
 //
@@ -366,10 +370,6 @@ void check_line(int x, int half_length, boolean phase) {
   display.drawPixel(x, UI_HEIGHT/2 - half_length + WALL_OFFSET, WHITE);
   display.drawPixel(x, UI_HEIGHT/2 + half_length + WALL_OFFSET, WHITE);
 }
-
-float pow2(float x) { return x * x; }
-
-float dist2(vec2 v, vec2 u) { return pow2(v.x - u.x) + pow2(v.y - u.y); }
 
 bool collision_detection(wall walls[], vec2 p) {
 

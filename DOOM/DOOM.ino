@@ -1,13 +1,10 @@
 #include <Adafruit_SSD1306.h>
 
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
 
-// The pins for I2C are defined by the Wire-library.
-// On an arduino UNO:       A4(SDA), A5(SCL)
-#define OLED_RESET     -1 // Reset pin # (or -1 if sharing Arduino reset pin)
-#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+#define OLED_RESET     -1
+#define SCREEN_ADDRESS 0x3C
 
 #define COLLISION_DIST 5
 #define WALL_OFFSET 0
@@ -118,6 +115,8 @@ const unsigned char PROGMEM muzzle_flash_bmp [] = {
 0x3F, 0xFC, 0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F, 0xFC, 0x2F, 0xFC, 
 };
 
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
 // Setup button pins
 const int shoot_btn = 5;
 const int l_btn = 4;
@@ -211,7 +210,10 @@ void setup() {
     }
 
     if (f == 0) {
-      p = collision_detection(walls, p.x + 2*cos(pa * (PI/180)), p.y + 2*sin(pa * (PI/180)));
+      vec2 pn = {p.x + 2*cos(pa * (PI/180)), p.y + 2*sin(pa * (PI/180))};
+      if (!collision_detection(walls, pn)) {
+        p = pn;
+      }
     }
 
     display.clearDisplay();
@@ -246,11 +248,6 @@ void raycast(wall* walls, vec2 p, float pa, bool show_gun) {
   float x3 = p.x;
   float y3 = p.y;
   float x4, y4;
-
-//  for (int w = 0; w < num_walls; w++) {
-//    bresenham_line((int)walls[w].points[0].x, (int)walls[w].points[0].y, (int)walls[w].points[1].x, (int)walls[w].points[1].y);
-//  }
-//  display.display();
 
   // Defines the number of rays
   for (int i = 0; i < 128; i+=2) {
@@ -370,23 +367,23 @@ void check_line(int x, int half_length, boolean phase) {
   display.drawPixel(x, UI_HEIGHT/2 + half_length + WALL_OFFSET, WHITE);
 }
 
-vec2 collision_detection(wall walls[], float px, float py) {
+float pow2(float x) { return x * x; }
 
-  vec2 nv;
-  nv.x = px;
-  nv.y = py;
+float dist2(vec2 v, vec2 u) { return pow2(v.x - u.x) + pow2(v.y - u.y); }
 
-  int dir = 0;
+bool collision_detection(wall walls[], vec2 p) {
+
+  int collision_dist2 = COLLISION_DIST * COLLISION_DIST;
   for (int i = 0; i < NUM_WALLS; i++) {
-    if (abs(walls[i].points[0].x - nv.x) < COLLISION_DIST) {
-      dir = nv.x - walls[i].points[0].x > 0 ? 1 : -1;
-      nv.x = walls[i].points[0].x + dir*COLLISION_DIST;
-    }
-    if (abs(walls[i].points[0].y - nv.y) < COLLISION_DIST) {
-      dir = nv.y - walls[i].points[0].y > 0 ? 1 : -1;
-      nv.y = walls[i].points[0].y + dir*COLLISION_DIST;
-    }
+    wall w = walls[i];
+    float w2 = dist2(w.points[0], w.points[1]);
+    if (w2 == 0) continue;
+
+    float t = ((p.x - w.points[0].x) * (w.points[1].x - w.points[0].x) + (p.y - w.points[0].y) * (w.points[1].y - w.points[0].y)) / w2;
+    float d2 = dist2(p, {w.points[0].x + t * (w.points[1].x - w.points[0].x), w.points[0].y + t * (w.points[1].y - w.points[0].y)});
+
+    if (d2 < collision_dist2) return true;
   }
 
-  return nv;
+  return false;
 }
